@@ -24,7 +24,11 @@ def print_game_info(game):
     print(game.get_dice(img_np))
 
 
-
+def string_to_int(string):
+    num = re.findall(r'[0-9]+', string)
+    if not num:
+        return None
+    return int(''.join(num))
 
 
 
@@ -101,31 +105,22 @@ class GameManipulator:
         else:
             print("Assaut image not found on screen.")
 
-    def braq(self):
-        screenshot = self.screenshot()
-        locations = list()
-        for scale in np.arange(0.5, 1.5, 0.05):  # scale from 80% to 120%
-            randint = random.randint(0, 200)
-            scaled_image = game.scale_image("cache/detect_braq.png", scale)
-            cv2.imwrite(f"cache/temp_braq{randint}.png", scaled_image)
-            location = pyautogui.locate(f"cache/temp_braq{randint}.png", screenshot, grayscale=True, confidence=0.7)
-            if location is not None:
-                locations.append(location)
+    def braq(self, images):
+        #shuffle images list order
+        random.shuffle(images)
+        #max 15 clicks
+        for image in images[:15]:
+            # click on the center of a random braq detected
+            pyautogui.click(pyautogui.center(image))
+            time.sleep(0.1)
 
-        if locations:
-            for location in locations:
-                center_x = self.window.left + location.left + location.width / 2
-                center_y = self.window.top + location.top + location.height / 2
-                pyautogui.click(center_x, center_y)
-                time.sleep(0.25)
-        else:
-            print("Braq image not found on screen.")
+
 
 
     def skip(self, location):
         # click on the center of location relative to self
-        center_x = self.window.left + location.left - location.width / 2
-        center_y = self.window.top + location.top - location.height / 4
+        center_x = self.window.left + location.left + location.width / 2
+        center_y = self.window.top + location.top + location.height / 4
         pyautogui.click(center_x, center_y)
 
     def skip_card_button(self):
@@ -139,6 +134,18 @@ class GameManipulator:
             pyautogui.click(pyautogui.center(location))
         else:
             print("Dice image not found on screen.")
+
+    def auto_roll(self, location):
+        if location:
+            print("Dice Autorolled.")
+            pyautogui.moveTo(pyautogui.center(location))
+            # stay click for 1.2 seconds
+            pyautogui.mouseDown()
+            time.sleep(1.2)
+            pyautogui.mouseUp()
+        else:
+            self.roll_dice()
+
     
     
 
@@ -156,23 +163,29 @@ class GameManipulator:
             scaled_image = self.scale_image(image, scale)
             temp_file = f"cache/temp.png"
             cv2.imwrite(temp_file, scaled_image)
-            location = pyautogui.locateOnScreen(temp_file,minSearchTime=0.2, grayscale=True, confidence=0.73)
-            os.remove(temp_file)  # remove the temporary file
+            location = pyautogui.locateOnScreen(image=temp_file, grayscale=True, confidence=0.8, minSearchTime=0.05)
+            try:
+                os.remove(temp_file)  # remove the temporary file
+            except PermissionError:
+                time.sleep(1)
+                os.remove(temp_file)  # remove the temporary file
+                pass
             if location is not None:
                 return location
         return None
+    
+    #locate all images on screen and return a list of locations
+    def locateAll(self, image):
+        locations = list(pyautogui.locateAllOnScreen(image, grayscale=True, confidence=0.8))
+        if locations:
+            return locations
+        else:
+            return None
 
 
-def string_to_int(string):
-    num = re.findall(r'[0-9]+', string)
-    if not num:
-        return None
-    return int(''.join(num))
 
 
-
-
-
+#START OF THE PROGRAM
 
 # Get all window titles
 all_windows = gw.getAllTitles()
@@ -185,62 +198,57 @@ for i, title in enumerate(all_windows):
 chosen_index = int(input("Enter the number of the window you want to use: "))
 
 # Get the chosen window
-bluestacks_windows = gw.getWindowsWithTitle(all_windows[chosen_index])[0]
+game_windows = gw.getWindowsWithTitle(all_windows[chosen_index])[0]
 
-if bluestacks_windows:
-    game = GameManipulator(bluestacks_windows)
+if game_windows:
+    game = GameManipulator(game_windows)
 
-    print("Fenêtre BlueStacks trouvée")
+    print("Fenêtre game trouvée")
+
+    lastevent = None
 
     while True:
 
         if keyboard.is_pressed('F'):
             print("F détecté, on quitte le programme")
             break
-
+        
         # Afficher les informations du jeu
+        if lastevent is not None:
+            print(lastevent)
         print_game_info(game)
 
-        go_location = game.locate("cache/go_button2.png")
+        go_location = game.locate("cache/go_button.png")
 
         if go_location is not None: 
-            print("GO détecté")
-            game.skip(go_location)
+            lastevent = "GO détecté"
+            game.auto_roll(go_location)
             continue
 
-        
         # Detection de recuperer
         image_location = game.locate("cache/detect_recup.PNG")
         if image_location is not None:
-            print("Recuperer détecté")
+            lastevent ="Recuperer détecté"
             game.skip(image_location)
-            continue
-
-        image_location2 = game.locate("cache/detect_recup2.PNG")
-        if image_location2 is not None:
-            print("Recuperer2 détecté")
-            game.skip(image_location2)
             continue
             
         # Détection des braquages
-        image_location = game.locate("cache/detect_braq.png")
-        if image_location is not None:
-            print("Braquage détecté")
-            game.braq()
+        image_locations = game.locateAll("cache/detect_braq.PNG")
+        if image_locations is not None:
+            lastevent ="Braquage détecté"
+            game.braq(image_locations)
             continue
+
         # Détection des assauts
-        image_location = game.locate("cache/detect_assaut.PNG")
+        image_location = game.locate("cache/detect_assaut2.PNG")
         if image_location is not None:
-            print("Assaut détecté")
+            lastevent ="Assaut détecté2"
             game.assaut()
             continue
 
         else:
-            print("Rien de détecté, on clique sur le plateau")
-            game.skip_card_button()
-            time.sleep(0.1)
+            plastevent ="Rien de détecté"
+            time.sleep(0.2)
             continue
-
-
 else:
-    print("Pas de fenêtre BlueStacks trouvée")
+    print("Pas de fenêtre trouvée")
