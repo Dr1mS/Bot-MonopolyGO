@@ -54,7 +54,7 @@ class GameManipulator:
         rogne = img_np[posY:posY+height, posX-width//2:posX+width//2]
 
         #Enregistrer l'image pour débogage si nécessaire
-        cv2.imwrite('cache/rogne.png', rogne)
+        cv2.imwrite('cache/DEBUG_moneyScreen.png', rogne)
 
         # Utiliser pytesseract pour reconnaître le texte
         text = pytesseract.image_to_string(rogne, config='--psm 6')
